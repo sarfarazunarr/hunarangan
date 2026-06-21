@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/context/ToastContext';
-import { ShoppingCart, Heart, MessageSquare, Sparkles, Check, ArrowRight, ShieldCheck, MapPin, Truck, Send, User } from 'lucide-react';
+import { ShoppingCart, Heart, MessageSquare, Sparkles, Check, ArrowRight, ShieldCheck, MapPin, Truck, Send, User, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { PAKISTAN_CITIES } from '@/lib/cities';
 
@@ -18,6 +18,11 @@ interface OrderItem {
   deliveryStatus: string;
   createdAt: string;
   sellerId: { name: string; location: string };
+  recipientName?: string;
+  recipientPhone?: string;
+  shippingAddress?: string;
+  notes?: string;
+  shipmentHistory?: { location: string; status: string; timestamp: string }[];
 }
 
 interface ProductItem {
@@ -47,6 +52,8 @@ export default function BuyerDashboard() {
   const [favorites, setFavorites] = useState<ProductItem[]>([]);
   const [chats, setChats] = useState<ChatItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState(false);
 
   // Ask AI states
   const [statsInput, setStatsInput] = useState('');
@@ -105,43 +112,22 @@ export default function BuyerDashboard() {
   const fetchBuyerDashboardData = async () => {
     if (!currentUser) return;
     setIsLoading(true);
+    setFetchError(false);
     try {
       const orderRes = await fetch(`/api/orders?userId=${currentUser.id}&role=buyer`);
+      if (!orderRes.ok) throw new Error('Failed to fetch orders');
       const orderData = await orderRes.json();
+      if (!orderData.success) throw new Error(orderData.error || 'Failed to fetch orders');
 
       const chatRes = await fetch(`/api/chat/rooms?userId=${currentUser.id}`);
       const chatData = await chatRes.json();
 
-      setOrders(orderData.orders || [
-        {
-          _id: 'o1',
-          productId: { title: { en: 'Red Sindhi Rilli Quilt', ur: 'سرخ رلی رضائی', sd: 'ڳاڙهي رلي' }, price: 4500, images: ['https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?w=800&auto=format&fit=crop&q=80'] },
-          amount: 4500,
-          paymentMethod: 'Mock_EasyPaisa',
-          paymentStatus: 'Paid_Escrow',
-          deliveryStatus: 'Shipped',
-          createdAt: new Date().toISOString(),
-          sellerId: { name: 'Mai Bhagi', location: 'Hyderabad' }
-        }
-      ]);
+      const favRes = await fetch(`/api/favorites?userId=${currentUser.id}`);
+      const favData = await favRes.json();
 
-      setFavorites([
-        {
-          _id: 'p2',
-          title: { en: 'Hand-block Printed Indigo Ajrak Shawl', ur: 'ہاتھ کی بلاک چھپائی والی اجرک شال', sd: 'هٿ سان ٺهيل نيري اجرڪ شال' },
-          price: 2800,
-          images: ['https://images.unsplash.com/photo-1606744824163-985d376605aa?w=800&auto=format&fit=crop&q=80'],
-          category: 'Ajrak'
-        }
-      ]);
-
-      setChats(chatData.rooms || [
-        {
-          roomId: `buyer1_2`,
-          sellerId: { _id: '2', name: 'Mai Bhagi' },
-          messages: [{ text: 'Yes, it takes 3 days to customize.', timestamp: new Date().toISOString() }]
-        }
-      ]);
+      setOrders(orderData.orders || []);
+      setFavorites(favData.success ? (favData.favorites || []) : []);
+      setChats(chatData.rooms || []);
 
       // Initialize welcome message
       setAiMessages([
@@ -155,6 +141,7 @@ export default function BuyerDashboard() {
 
     } catch (e) {
       console.error(e);
+      setFetchError(true);
     } finally {
       setIsLoading(false);
     }
@@ -398,7 +385,17 @@ export default function BuyerDashboard() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', maxWidth: '800px', margin: '0 auto' }}>
               <h3 style={{ fontSize: '1.25rem', fontWeight: 800 }}>{language === 'en' ? 'Order Tracking' : 'آرڈرز کی صورتحال'}</h3>
               
-              {orders.length === 0 ? (
+              {fetchError ? (
+                <div style={{ textAlign: 'center', padding: '3rem', background: 'rgba(220, 38, 38, 0.05)', borderRadius: '1rem', border: '1px solid rgba(220, 38, 38, 0.1)' }}>
+                  <p style={{ color: 'var(--accent)', fontWeight: 700 }}>
+                    {language === 'en' ? 'Failed to fetch orders. Please try again.' : 'آرڈرز لوڈ کرنے میں خرابی۔ دوبارہ کوشش کریں۔'}
+                  </p>
+                  <button onClick={fetchBuyerDashboardData} className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', margin: '1rem auto 0', padding: '0.5rem 1.25rem' }}>
+                    <RefreshCw size={14} />
+                    <span>{language === 'en' ? 'Try Again' : 'دوبارہ کوشش کریں'}</span>
+                  </button>
+                </div>
+              ) : orders.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '3rem' }}>
                   <p>{language === 'en' ? 'No orders placed yet.' : 'کوئی آرڈر نہیں ملا۔'}</p>
                 </div>
@@ -407,94 +404,148 @@ export default function BuyerDashboard() {
                   const steps = ['Placed', 'Packed', 'Shipped', 'Delivered'];
                   const currentStepIdx = steps.indexOf(order.deliveryStatus);
                   const prodName = order.productId ? (order.productId.title[language] || order.productId.title.en) : order.customOfferDetails?.title;
+                  const isExpanded = expandedOrderId === order._id;
                   
                   return (
-                    <div key={order._id} className="glass-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    <div key={order._id} className="glass-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', border: isExpanded ? '2px solid var(--primary)' : '1px solid var(--border)', transition: 'all 0.2s ease' }}>
                       
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      {/* Summary Row - Clickable to Toggle Details */}
+                      <div 
+                        onClick={() => setExpandedOrderId(isExpanded ? null : order._id)}
+                        style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}
+                      >
                         <div>
-                          <h4 style={{ fontWeight: 800, fontSize: '1.1rem' }}>{prodName}</h4>
-                          <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>Order ID: {order._id}</span>
+                          <h4 style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--primary)' }}>{prodName}</h4>
+                          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '0.25rem', fontSize: '0.8rem', opacity: 0.7 }}>
+                            <span>ID: {order._id}</span>
+                            <span>•</span>
+                            <span>{new Date(order.createdAt).toLocaleDateString()}</span>
+                          </div>
                         </div>
-                        <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--primary)' }}>
-                          Rs. {order.amount.toLocaleString()}
-                        </span>
-                      </div>
-
-                      {/* Visual Stepper Tracker */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 0', position: 'relative' }}>
                         
-                        <div style={{
-                          position: 'absolute',
-                          left: '5%',
-                          right: '5%',
-                          top: '50%',
-                          height: '4px',
-                          background: 'rgba(0,0,0,0.1)',
-                          zIndex: 1,
-                          transform: 'translateY(-50%)'
-                        }}></div>
-
-                        <div style={{
-                          position: 'absolute',
-                          left: '5%',
-                          width: `${(currentStepIdx / 3) * 90}%`,
-                          top: '50%',
-                          height: '4px',
-                          background: 'var(--primary)',
-                          zIndex: 2,
-                          transform: 'translateY(-50%)',
-                          transition: 'width 0.5s ease'
-                        }}></div>
-
-                        {steps.map((step, idx) => {
-                          const isActive = idx <= currentStepIdx;
-                          const label = t(`status${step}`);
-                          
-                          return (
-                            <div key={step} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 10, position: 'relative', flex: 1 }}>
-                              <div style={{
-                                width: '2rem',
-                                height: '2rem',
-                                borderRadius: '50%',
-                                background: isActive ? 'var(--primary)' : 'white',
-                                border: isActive ? 'none' : '2px solid rgba(0,0,0,0.15)',
-                                color: isActive ? 'white' : 'rgba(0,0,0,0.4)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontWeight: 700,
-                                fontSize: '0.9rem',
-                                transition: 'all 0.3s ease',
-                                boxShadow: 'var(--shadow-sm)'
-                              }}>
-                                {isActive ? <Check size={14} /> : idx + 1}
-                              </div>
-                              <span style={{ fontSize: '0.85rem', fontWeight: isActive ? 700 : 500, opacity: isActive ? 1 : 0.6, marginTop: '0.5rem', textAlign: 'center' }}>
-                                {label}
-                              </span>
-                            </div>
-                          );
-                        })}
-
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                          <div style={{ textAlign: 'right' }}>
+                            <strong style={{ fontSize: '1.15rem', display: 'block' }}>Rs. {order.amount.toLocaleString()}</strong>
+                            <span style={{ 
+                              fontSize: '0.75rem', 
+                              background: order.deliveryStatus === 'Delivered' ? 'rgba(15, 110, 71, 0.1)' : 'rgba(194, 125, 56, 0.1)', 
+                              color: order.deliveryStatus === 'Delivered' ? 'var(--primary)' : 'var(--secondary)', 
+                              padding: '0.15rem 0.5rem', 
+                              borderRadius: '9999px', 
+                              fontWeight: 700 
+                            }}>
+                              {t(`status${order.deliveryStatus}`)}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: '1.1rem', opacity: 0.6, fontWeight: 'bold' }}>
+                            {isExpanded ? '▲' : '▼'}
+                          </span>
+                        </div>
                       </div>
 
-                      {/* Escrow Release Button */}
-                      {order.paymentStatus === 'Paid_Escrow' && order.deliveryStatus === 'Delivered' && (
-                        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'center' }}>
-                          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--secondary)', display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
-                            <ShieldCheck size={16} />
-                            <span>{t('escrowPaid')} - Please release funds since you received items.</span>
-                          </span>
-                          <button onClick={() => handleReleaseFunds(order._id)} className="btn btn-primary" style={{ padding: '0.6rem 1.5rem', borderRadius: '0.5rem' }}>
-                            {language === 'en' ? 'Release Escrow Funds to Artisan' : 'رقم کاریگر کو منتقل کریں'}
-                          </button>
-                        </div>
-                      )}
+                      {/* Expandable Section */}
+                      {isExpanded && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', borderTop: '1px solid var(--border-light)', paddingTop: '1rem', animation: 'fadeIn 0.2s ease-out' }}>
+                          
+                          {/* Shipping Details Grid */}
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', fontSize: '0.9rem', background: 'rgba(0,0,0,0.02)', padding: '1rem', borderRadius: '0.5rem' }}>
+                            <div>
+                              <span style={{ opacity: 0.6, display: 'block', fontSize: '0.75rem' }}>RECIPIENT NAME:</span>
+                              <strong>{order.recipientName || 'N/A'}</strong>
+                            </div>
+                            <div>
+                              <span style={{ opacity: 0.6, display: 'block', fontSize: '0.75rem' }}>RECIPIENT PHONE:</span>
+                              <strong>{order.recipientPhone || 'N/A'}</strong>
+                            </div>
+                            <div>
+                              <span style={{ opacity: 0.6, display: 'block', fontSize: '0.75rem' }}>DELIVERY METHOD & PAYMENT:</span>
+                              <strong>{order.paymentMethod} ({order.paymentStatus})</strong>
+                            </div>
+                            <div style={{ gridColumn: 'span 2' }}>
+                              <span style={{ opacity: 0.6, display: 'block', fontSize: '0.75rem' }}>SHIPPING ADDRESS:</span>
+                              <strong>{order.shippingAddress || 'N/A'}</strong>
+                            </div>
+                          </div>
 
-                      {order.paymentStatus === 'Released_To_Seller' && (
-                        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem', textAlign: 'center', color: 'var(--primary)', fontWeight: 700, fontSize: '0.9rem' }}>
-                          ✓ {t('escrowReleased')}
+                          {/* Visual Stepper Tracker */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 0', position: 'relative' }}>
+                            <div style={{ position: 'absolute', left: '5%', right: '5%', top: '50%', height: '4px', background: 'rgba(0,0,0,0.1)', zIndex: 1, transform: 'translateY(-50%)' }}></div>
+                            <div style={{ position: 'absolute', left: '5%', width: `${(currentStepIdx / 3) * 90}%`, top: '50%', height: '4px', background: 'var(--primary)', zIndex: 2, transform: 'translateY(-50%)', transition: 'width 0.5s ease' }}></div>
+
+                            {steps.map((step, idx) => {
+                              const isActive = idx <= currentStepIdx;
+                              const label = t(`status${step}`);
+                              
+                              return (
+                                <div key={step} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 10, position: 'relative', flex: 1 }}>
+                                  <div style={{
+                                    width: '2rem',
+                                    height: '2rem',
+                                    borderRadius: '50%',
+                                    background: isActive ? 'var(--primary)' : 'white',
+                                    border: isActive ? 'none' : '2px solid rgba(0,0,0,0.15)',
+                                    color: isActive ? 'white' : 'rgba(0,0,0,0.4)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontWeight: 700,
+                                    fontSize: '0.9rem',
+                                    transition: 'all 0.3s ease',
+                                    boxShadow: 'var(--shadow-sm)'
+                                  }}>
+                                    {isActive ? <Check size={14} /> : idx + 1}
+                                  </div>
+                                  <span style={{ fontSize: '0.85rem', fontWeight: isActive ? 700 : 500, opacity: isActive ? 1 : 0.6, marginTop: '0.5rem', textAlign: 'center' }}>
+                                    {label}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Shipment Phase & Detailed Logs */}
+                          <div style={{ borderTop: '1px dotted var(--border-light)', paddingTop: '0.75rem' }}>
+                            <strong style={{ fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem', color: 'var(--primary)' }}>
+                              {language === 'en' ? 'Detailed Shipment & Courier History' : 'شپمنٹ اور کورئیر کی تاریخ'}
+                            </strong>
+                            {!order.shipmentHistory || order.shipmentHistory.length === 0 ? (
+                              <p style={{ fontSize: '0.85rem', opacity: 0.6, fontStyle: 'italic' }}>
+                                {language === 'en' ? 'Package is in processing phase. No courier updates yet.' : 'پیکیج تیار کیا جا رہا ہے۔ ابھی کورئیر کی معلومات دستیاب نہیں ہیں۔'}
+                              </p>
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+                                {order.shipmentHistory.map((hist, hIdx) => (
+                                  <div key={hIdx} style={{ fontSize: '0.85rem', background: 'var(--input-bg)', padding: '0.6rem 0.8rem', borderRadius: '0.4rem', borderLeft: '3px solid var(--secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                      <strong>{hist.location}</strong>
+                                      {hist.status && <span style={{ opacity: 0.85, marginLeft: '0.5rem', fontSize: '0.8rem' }}>- {hist.status}</span>}
+                                    </div>
+                                    <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>{new Date(hist.timestamp).toLocaleString()}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Escrow Release Button */}
+                          {order.paymentStatus === 'Paid_Escrow' && order.deliveryStatus === 'Delivered' && (
+                            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'center' }}>
+                              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--secondary)', display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+                                <ShieldCheck size={16} />
+                                <span>{t('escrowPaid')} - Please release funds since you received items.</span>
+                              </span>
+                              <button onClick={() => handleReleaseFunds(order._id)} className="btn btn-primary" style={{ padding: '0.6rem 1.5rem', borderRadius: '0.5rem' }}>
+                                {language === 'en' ? 'Release Escrow Funds to Artisan' : 'رقم کاریگر کو منتقل کریں'}
+                              </button>
+                            </div>
+                          )}
+
+                          {order.paymentStatus === 'Released_To_Seller' && (
+                            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem', textAlign: 'center', color: 'var(--primary)', fontWeight: 700, fontSize: '0.9rem' }}>
+                              ✓ {t('escrowReleased')}
+                            </div>
+                          )}
+
                         </div>
                       )}
 

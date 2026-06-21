@@ -6,7 +6,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/context/ToastContext';
 import { 
   ShoppingBag, MessageSquare, MapPin, Truck, ArrowLeft, 
-  Sparkles, Send, Star, ChevronDown, ChevronUp, Clock, Info, Check 
+  Sparkles, Send, Star, ChevronDown, ChevronUp, Clock, Info, Check, Heart 
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -51,6 +51,7 @@ export default function ProductDetailPage() {
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [relatedProducts, setRelatedProducts] = useState<ProductDetail[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaved, setIsSaved] = useState(false);
 
   // Widget States
   const [widgetQuestion, setWidgetQuestion] = useState('');
@@ -142,14 +143,56 @@ export default function ProductDetailPage() {
   };
 
   useEffect(() => {
-    // Auth check for reviews
+    // Auth check for reviews & favorites
     const storedUser = localStorage.getItem('hunarangan-user');
+    let userObj: any = null;
     if (storedUser) {
-      setCurrentUser(JSON.parse(storedUser));
+      userObj = JSON.parse(storedUser);
+      setCurrentUser(userObj);
     }
     
     fetchProductDetails();
+
+    if (userObj) {
+      fetch(`/api/favorites?userId=${userObj.id}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.favorites) {
+            const saved = data.favorites.some((fav: any) => fav._id === productId);
+            setIsSaved(saved);
+          }
+        })
+        .catch(err => console.error('Error fetching favorites:', err));
+    }
   }, [productId]);
+
+  const handleToggleSave = async () => {
+    if (!currentUser) {
+      router.push('/auth/login');
+      return;
+    }
+    try {
+      const res = await fetch('/api/favorites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser.id, productId })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setIsSaved(data.isSaved);
+        if (data.isSaved) {
+          showSuccessToast(language === 'en' ? 'Product saved to your favorites!' : 'مصنوعات آپ کے پسندیدہ میں محفوظ کر لی گئی ہے!');
+        } else {
+          showSuccessToast(language === 'en' ? 'Product removed from favorites.' : 'مصنوعات پسندیدہ سے نکال دی گئی ہے۔');
+        }
+      } else {
+        showErrorToast(data.error || 'Failed to toggle save.');
+      }
+    } catch (err) {
+      console.error(err);
+      showErrorToast('Failed to toggle save.');
+    }
+  };
 
   const handleTextSearchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -370,8 +413,8 @@ export default function ProductDetailPage() {
 
           </div>
 
-          {/* Checkout & Chat Actions */}
-          <div style={{ display: 'flex', gap: '1rem' }}>
+          {/* Checkout, Chat & Save Actions */}
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
             <button onClick={handleBuyNow} className="btn btn-primary" style={{ flex: 1, padding: '1rem 1.5rem', borderRadius: '0.75rem', fontSize: '1.05rem' }}>
               <ShoppingBag size={18} />
               <span>{t('buyNow')}</span>
@@ -379,6 +422,9 @@ export default function ProductDetailPage() {
             <button onClick={handleChatDirect} className="btn btn-outline" style={{ padding: '1rem', borderRadius: '0.75rem' }}>
               <MessageSquare size={18} />
               <span>{language === 'en' ? 'Chat' : 'چیٹ'}</span>
+            </button>
+            <button onClick={handleToggleSave} className="btn btn-outline" style={{ padding: '1rem', borderRadius: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', borderColor: isSaved ? 'var(--accent)' : 'var(--primary)', color: isSaved ? 'var(--accent)' : 'var(--primary)', background: isSaved ? 'rgba(185, 28, 28, 0.05)' : 'transparent' }} title={isSaved ? 'Remove from Saved' : 'Save Product'}>
+              <Heart size={18} style={{ fill: isSaved ? 'var(--accent)' : 'none', color: isSaved ? 'var(--accent)' : 'currentColor' }} />
             </button>
           </div>
 

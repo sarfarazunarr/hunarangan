@@ -80,6 +80,10 @@ export async function POST(request: Request) {
       // If approved, initialize the escrow transaction and create Order
       let orderId = null;
       if (status === 'approved') {
+        // Fetch buyer and seller details for SMS and autofilling
+        const buyer = await User.findById(chatRoom.buyerId);
+        const seller = await User.findById(chatRoom.sellerId);
+
         const order = await Order.create({
           buyerId: chatRoom.buyerId,
           sellerId: chatRoom.sellerId,
@@ -87,6 +91,9 @@ export async function POST(request: Request) {
           paymentMethod: 'Mock_Card', // Escrow mock payment
           paymentStatus: 'Paid_Escrow', // Funds locked
           deliveryStatus: 'Placed',
+          shippingAddress: buyer ? buyer.address : '',
+          recipientPhone: buyer ? buyer.phone : '',
+          recipientName: buyer ? buyer.name : '',
           customOfferDetails: {
             title: message.customOffer.title,
             description: message.customOffer.description,
@@ -94,10 +101,6 @@ export async function POST(request: Request) {
           }
         });
         orderId = order._id;
-
-        // Fetch buyer and seller details for SMS
-        const buyer = await User.findById(chatRoom.buyerId);
-        const seller = await User.findById(chatRoom.sellerId);
 
         if (seller && seller.phone) {
           const sellerMsg = `Dear ${seller.name}, your custom offer "${message.customOffer.title}" for Rs. ${message.customOffer.amount} has been approved by ${buyer ? buyer.name : 'the buyer'}. Escrow payment is secured. You can start working on the order.`;

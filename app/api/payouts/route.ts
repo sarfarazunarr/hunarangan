@@ -112,7 +112,7 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   try {
     await dbConnect();
-    const { requestId, status } = await request.json();
+    const { requestId, status, transactionId, transactionDetails } = await request.json();
 
     if (!requestId || !status) {
       return NextResponse.json({ error: 'Missing required parameters.' }, { status: 400 });
@@ -129,6 +129,12 @@ export async function PUT(request: Request) {
 
     payoutReq.status = status;
     payoutReq.resolvedAt = new Date();
+    
+    if (status === 'Approved') {
+      payoutReq.transactionId = transactionId || '';
+      payoutReq.transactionDetails = transactionDetails || '';
+    }
+    
     await payoutReq.save();
 
     return NextResponse.json({ success: true, payoutRequest: payoutReq });

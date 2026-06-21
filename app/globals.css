@@ -660,6 +660,7 @@ html.dark .footer-bottom {
     left: 0 !important;
     top: 0 !important;
   }
+}
 
 /* Hero Banner Premium Gradients */
 .hero-banner-main {
@@ -669,4 +670,11 @@ html.dark .footer-bottom {
 
 html.dark .hero-banner-main {
   background: linear-gradient(135deg, #0f2b1d 0%, #2f2518 50%, #0d1210 100%) !important;
+}
+
+@media (max-width: 768px) {
+  .responsive-profile-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1.5rem !important;
+  }
 }

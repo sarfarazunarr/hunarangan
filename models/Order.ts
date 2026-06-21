@@ -17,6 +17,11 @@ export interface IOrder extends Document {
   recipientPhone: string;
   recipientName: string;
   notes: string;
+  shipmentHistory?: {
+    location: string;
+    status: string;
+    timestamp: Date;
+  }[];
   createdAt: Date;
 }
 
@@ -49,6 +54,11 @@ const OrderSchema = new Schema<IOrder>({
   recipientPhone: { type: String, default: '' },
   recipientName: { type: String, default: '' },
   notes: { type: String, default: '' },
+  shipmentHistory: [{
+    location: { type: String, required: true },
+    status: { type: String, default: '' },
+    timestamp: { type: Date, default: Date.now }
+  }],
   createdAt: { type: Date, default: Date.now },
 });
 

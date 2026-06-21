@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/context/ToastContext';
-import { Check, ShieldCheck, Truck, ArrowLeft, Loader, ArrowRight } from 'lucide-react';
+import { Check, ShieldCheck, Truck, ArrowLeft, Loader, ArrowRight, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 
 interface OrderDetail {
@@ -18,6 +18,11 @@ interface OrderDetail {
   createdAt: string;
   sellerId: { name: string; location: string };
   buyerId: { name: string };
+  recipientName?: string;
+  recipientPhone?: string;
+  shippingAddress?: string;
+  notes?: string;
+  shipmentHistory?: { location: string; status: string; timestamp: string }[];
 }
 
 export default function OrderTrackingPage() {
@@ -29,37 +34,24 @@ export default function OrderTrackingPage() {
 
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
 
   const fetchOrderDetails = async () => {
     setIsLoading(true);
+    setFetchError(false);
     try {
-      // Find order in database
-      // For fallback/offline evaluation, we parse standard details
-      const storedUser = localStorage.getItem('hunarangan-user');
-      const userId = storedUser ? JSON.parse(storedUser).id : 'buyer1';
-      
-      const res = await fetch(`/api/orders?userId=${userId}&role=buyer`);
+      const res = await fetch(`/api/orders?orderId=${orderId}`);
+      if (!res.ok) throw new Error('Failed to fetch order details.');
       const data = await res.json();
       
-      if (data.success && data.orders && data.orders.length > 0) {
-        const found = data.orders.find((o: any) => o._id === orderId);
-        setOrder(found || data.orders[0]);
+      if (data.success && data.order) {
+        setOrder(data.order);
       } else {
-        // Fallback mock order
-        setOrder({
-          _id: orderId,
-          productId: { title: { en: 'Red Sindhi Rilli Quilt', ur: 'سرخ رلی رضائی', sd: 'ڳاڙهي رلي' }, price: 4500, images: ['https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?w=800&auto=format&fit=crop&q=80'] },
-          amount: 4500,
-          paymentMethod: 'Mock_EasyPaisa',
-          paymentStatus: 'Paid_Escrow',
-          deliveryStatus: 'Placed',
-          createdAt: new Date().toISOString(),
-          sellerId: { name: 'Mai Bhagi', location: 'Hyderabad' },
-          buyerId: { name: 'Sajida Bano' }
-        });
+        setOrder(null);
       }
     } catch (e) {
       console.error(e);
+      setFetchError(true);
     } finally {
       setIsLoading(false);
     }
@@ -101,10 +93,36 @@ export default function OrderTrackingPage() {
     );
   }
 
+  if (fetchError) {
+    return (
+      <div className="container" style={{ textAlign: 'center', padding: '3rem 1.5rem', maxWidth: '650px', marginTop: '1.5rem' }}>
+        <button onClick={() => router.push('/dashboard/buyer')} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', fontWeight: 700, fontSize: '0.95rem', marginBottom: '1.5rem' }}>
+          <ArrowLeft size={16} />
+          <span>{language === 'en' ? 'Go to Dashboard' : 'ڈیش بورڈ پر جائیں'}</span>
+        </button>
+        <div className="glass-card" style={{ padding: '2.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center' }}>
+          <p style={{ color: 'var(--accent)', fontWeight: 700 }}>
+            {language === 'en' ? 'Failed to fetch order details. Please try again.' : 'آرڈر کی تفصیلات لوڈ کرنے میں خرابی۔ دوبارہ کوشش کریں۔'}
+          </p>
+          <button onClick={fetchOrderDetails} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.5rem' }}>
+            <RefreshCw size={14} />
+            <span>{language === 'en' ? 'Try Again' : 'دوبارہ کوشش کریں'}</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!order) {
     return (
-      <div className="container" style={{ textAlign: 'center', padding: '3rem' }}>
-        <p>Order not found.</p>
+      <div className="container" style={{ textAlign: 'center', padding: '3rem 1.5rem', maxWidth: '650px', marginTop: '1.5rem' }}>
+        <button onClick={() => router.push('/dashboard/buyer')} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', fontWeight: 700, fontSize: '0.95rem', marginBottom: '1.5rem' }}>
+          <ArrowLeft size={16} />
+          <span>{language === 'en' ? 'Go to Dashboard' : 'ڈیش بورڈ پر جائیں'}</span>
+        </button>
+        <div className="glass-card" style={{ padding: '2.5rem' }}>
+          <p>{language === 'en' ? 'Order not found.' : 'آرڈر نہیں ملا۔'}</p>
+        </div>
       </div>
     );
   }
@@ -189,9 +207,33 @@ export default function OrderTrackingPage() {
 
         </div>
 
+        {/* Shipment History logs */}
+        <div style={{ borderTop: '1px dotted var(--border-light)', paddingTop: '1rem', marginTop: '0.5rem' }}>
+          <strong style={{ fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem', color: 'var(--primary)' }}>
+            {language === 'en' ? 'Detailed Shipment & Courier History' : 'شپمنٹ اور کورئیر کی تاریخ'}
+          </strong>
+          {!order.shipmentHistory || order.shipmentHistory.length === 0 ? (
+            <p style={{ fontSize: '0.85rem', opacity: 0.6, fontStyle: 'italic' }}>
+              {language === 'en' ? 'Package is in processing phase. No courier updates yet.' : 'پیکیج تیار کیا جا رہا ہے۔ ابھی کورئیر کی معلومات دستیاب نہیں ہیں۔'}
+            </p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+              {order.shipmentHistory.map((hist: any, hIdx: number) => (
+                <div key={hIdx} style={{ fontSize: '0.85rem', background: 'var(--input-bg)', padding: '0.6rem 0.8rem', borderRadius: '0.4rem', borderLeft: '3px solid var(--secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <strong>{hist.location}</strong>
+                    {hist.status && <span style={{ opacity: 0.85, marginLeft: '0.5rem', fontSize: '0.8rem' }}>- {hist.status}</span>}
+                  </div>
+                  <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>{new Date(hist.timestamp).toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Escrow payout unlock action */}
         {order.paymentStatus === 'Paid_Escrow' && order.deliveryStatus === 'Delivered' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center', background: 'rgba(217, 119, 6, 0.05)', padding: '1rem', borderRadius: '0.75rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center', background: 'rgba(217, 119, 6, 0.05)', padding: '1rem', borderRadius: '0.75rem', marginTop: '1rem' }}>
             <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--secondary)', display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
               <ShieldCheck size={16} />
               <span>{language === 'en' ? 'Package Delivered! Release Funds to Seller.' : 'پیکیج موصول ہو گیا! رقم کاریگر کو منتقل کریں۔'}</span>
@@ -201,11 +243,11 @@ export default function OrderTrackingPage() {
             </button>
           </div>
         ) : order.paymentStatus === 'Released_To_Seller' ? (
-          <div style={{ background: 'rgba(15, 110, 71, 0.08)', color: 'var(--primary)', padding: '1rem', borderRadius: '0.75rem', textAlign: 'center', fontWeight: 700 }}>
+          <div style={{ background: 'rgba(15, 110, 71, 0.08)', color: 'var(--primary)', padding: '1rem', borderRadius: '0.75rem', textAlign: 'center', fontWeight: 700, marginTop: '1rem' }}>
             ✓ {t('escrowReleased')}
           </div>
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--secondary)', background: 'rgba(217, 119, 6, 0.05)', padding: '0.75rem', borderRadius: '0.5rem', fontSize: '0.85rem', fontWeight: 600 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--secondary)', background: 'rgba(217, 119, 6, 0.05)', padding: '0.75rem', borderRadius: '0.5rem', fontSize: '0.85rem', fontWeight: 600, marginTop: '1rem' }}>
             <Truck size={16} />
             <span>
               {language === 'en' 

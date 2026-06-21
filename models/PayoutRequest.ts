@@ -7,6 +7,8 @@ export interface IPayoutRequest extends Document {
   paymentDetails: string; // e.g. EasyPaisa number, bank account details, etc.
   createdAt: Date;
   resolvedAt?: Date;
+  transactionId?: string;
+  transactionDetails?: string;
 }
 
 const PayoutRequestSchema = new Schema<IPayoutRequest>({
@@ -18,6 +20,8 @@ const PayoutRequestSchema = new Schema<IPayoutRequest>({
     default: 'Pending'
   },
   paymentDetails: { type: String, default: '' },
+  transactionId: { type: String, default: '' },
+  transactionDetails: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now },
   resolvedAt: { type: Date }
 });

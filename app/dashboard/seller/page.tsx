@@ -18,6 +18,11 @@ interface OrderItem {
   deliveryStatus: string;
   createdAt: string;
   buyerId: { name: string; phone: string };
+  recipientName?: string;
+  recipientPhone?: string;
+  shippingAddress?: string;
+  notes?: string;
+  shipmentHistory?: { location: string; status: string; timestamp: string }[];
 }
 
 interface ProductItem {
@@ -47,6 +52,8 @@ export default function SellerDashboard() {
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [chats, setChats] = useState<ChatItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState(false);
 
   // Edit State
   const [editProductId, setEditProductId] = useState<string | null>(null);
@@ -289,53 +296,27 @@ export default function SellerDashboard() {
   const fetchSellerDashboardData = async () => {
     if (!currentUser) return;
     setIsLoading(true);
+    setFetchError(false);
     try {
       fetchPayoutDetails();
       fetchFundingDetails();
       const orderRes = await fetch(`/api/orders?userId=${currentUser.id}&role=seller`);
+      if (!orderRes.ok) throw new Error('Failed to fetch sales');
       const orderData = await orderRes.json();
+      if (!orderData.success) throw new Error(orderData.error || 'Failed to fetch sales');
       
       const prodRes = await fetch(`/api/products?sellerId=${currentUser.id}`);
+      if (!prodRes.ok) throw new Error('Failed to fetch products');
       const prodData = await prodRes.json();
+      if (!prodData.success) throw new Error(prodData.error || 'Failed to fetch products');
 
       const chatRes = await fetch(`/api/chat/rooms?userId=${currentUser.id}`);
+      if (!chatRes.ok) throw new Error('Failed to fetch chats');
       const chatData = await chatRes.json();
 
-      setOrders(orderData.orders || [
-        {
-          _id: 'o1',
-          productId: { title: { en: 'Red Sindhi Rilli Quilt', ur: 'سرخ رلی رضائی', sd: 'ڳاڙهي رلي' }, price: 4500 },
-          amount: 4500,
-          paymentMethod: 'Mock_EasyPaisa',
-          paymentStatus: 'Paid_Escrow',
-          deliveryStatus: 'Placed',
-          createdAt: new Date().toISOString(),
-          buyerId: { name: 'Sajida Bano', phone: '03009998888' }
-        },
-        {
-          _id: 'o2',
-          customOfferDetails: { title: 'Custom Embroidered Shalwar Kameez', amount: 5000 },
-          amount: 5000,
-          paymentMethod: 'COD',
-          paymentStatus: 'Pending',
-          deliveryStatus: 'Shipped',
-          createdAt: new Date().toISOString(),
-          buyerId: { name: 'Kiran Ali', phone: '03112223333' }
-        }
-      ]);
-
-      setProducts(prodData.products || [
-        { _id: 'p1', title: { en: 'Traditional Red Sindhi Rilli Quilt', ur: 'سرخ رلی رضائی', sd: 'ڳاڙهي رلي' }, price: 4500, category: 'Rilli', isCustomService: false },
-        { _id: 'p2', title: { en: 'Hand-block Printed Indigo Ajrak Shawl', ur: 'ہاتھ کی بلاک چھپائی والی اجرک شال', sd: 'هٿ سان ٺهيل نيري اجرڪ شال' }, price: 2800, category: 'Ajrak', isCustomService: false }
-      ]);
-
-      setChats(chatData.rooms || [
-        {
-          roomId: `${currentUser.id}_buyer1`,
-          buyerId: { _id: 'buyer1', name: 'Sajida Bano' },
-          messages: [{ text: 'Assalam-o-Alaikum! Can I customize the colors?', timestamp: new Date().toISOString() }]
-        }
-      ]);
+      setOrders(orderData.orders || []);
+      setProducts(prodData.products || []);
+      setChats(chatData.rooms || []);
 
       // Initialize welcome message in Ask AI tab
       setAiMessages([
@@ -349,6 +330,7 @@ export default function SellerDashboard() {
 
     } catch (e) {
       console.error(e);
+      setFetchError(true);
     } finally {
       setIsLoading(false);
     }
@@ -808,52 +790,174 @@ export default function SellerDashboard() {
               {/* Active list */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <h3 style={{ fontSize: '1.25rem', fontWeight: 800 }}>{language === 'en' ? 'Active Sales' : 'آرڈرز کی فہرست'}</h3>
-                {orders.map((order) => (
-                  <div key={order._id} className="glass-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
-                      <div>
-                        <h4 style={{ fontWeight: 800, fontSize: '1.05rem' }}>
-                          {order.productId ? (order.productId.title[language] || order.productId.title.en) : order.customOfferDetails?.title}
-                        </h4>
-                        <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>Order ID: {order._id}</span>
-                      </div>
-                      <span style={{ fontWeight: 800, fontSize: '1.15rem', color: 'var(--primary)' }}>
-                        Rs. {order.amount.toLocaleString()}
-                      </span>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', background: 'rgba(0,0,0,0.03)', padding: '0.5rem', borderRadius: '0.5rem', fontSize: '0.85rem' }}>
-                      <div>
-                        <span style={{ opacity: 0.6, display: 'block', fontSize: '0.75rem' }}>BUYER:</span>
-                        <strong>{order.buyerId.name}</strong>
-                      </div>
-                      <div>
-                        <span style={{ opacity: 0.6, display: 'block', fontSize: '0.75rem' }}>PAYMENT STATUS:</span>
-                        <strong style={{ color: order.paymentStatus === 'Paid_Escrow' ? 'var(--secondary)' : 'var(--primary)' }}>
-                          {order.paymentStatus}
-                        </strong>
-                      </div>
-                      <div>
-                        <span style={{ opacity: 0.6, display: 'block', fontSize: '0.75rem' }}>SHIPMENT STEP:</span>
-                        <strong>{order.deliveryStatus}</strong>
-                      </div>
-                    </div>
-
-                    {/* Stepper advancement controls */}
-                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                      {order.deliveryStatus === 'Placed' && (
-                        <button onClick={() => updateDeliveryStatus(order._id, 'Packed')} className="btn btn-outline" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', borderRadius: '0.3rem' }}>
-                          Mark Packed
-                        </button>
-                      )}
-                      {order.deliveryStatus === 'Packed' && (
-                        <button onClick={() => updateDeliveryStatus(order._id, 'Shipped')} className="btn btn-outline" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', borderRadius: '0.3rem' }}>
-                          Mark Shipped
-                        </button>
-                      )}
-                    </div>
+                
+                {fetchError ? (
+                  <div style={{ textAlign: 'center', padding: '2.5rem', background: 'rgba(220, 38, 38, 0.05)', borderRadius: '1rem', border: '1px solid rgba(220, 38, 38, 0.1)' }}>
+                    <p style={{ color: 'var(--accent)', fontWeight: 700 }}>
+                      {language === 'en' ? 'Failed to fetch sales. Please try again.' : 'آرڈرز لوڈ کرنے میں خرابی۔ دوبارہ کوشش کریں۔'}
+                    </p>
+                    <button onClick={fetchSellerDashboardData} className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', margin: '1rem auto 0', padding: '0.5rem 1.25rem' }}>
+                      <RefreshCw size={14} />
+                      <span>{language === 'en' ? 'Try Again' : 'دوبارہ کوشش کریں'}</span>
+                    </button>
                   </div>
-                ))}
+                ) : orders.length === 0 ? (
+                  <div style={{ padding: '2rem', textAlign: 'center', background: 'rgba(0,0,0,0.02)', borderRadius: '0.75rem', border: '1px dashed var(--border)' }}>
+                    {language === 'en' ? 'No active sales.' : 'کوئی فعال سیلز نہیں ہیں۔'}
+                  </div>
+                ) : (
+                  orders.map((order) => {
+                    const steps = ['Placed', 'Packed', 'Shipped', 'Delivered'];
+                    const currentStepIdx = steps.indexOf(order.deliveryStatus);
+                    const prodName = order.productId ? (order.productId.title[language] || order.productId.title.en) : order.customOfferDetails?.title;
+                    const isExpanded = expandedOrderId === order._id;
+                    
+                    return (
+                      <div key={order._id} className="glass-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', border: isExpanded ? '2px solid var(--primary)' : '1px solid var(--border)', transition: 'all 0.2s ease' }}>
+                        
+                        {/* Summary Header */}
+                        <div 
+                          onClick={() => setExpandedOrderId(isExpanded ? null : order._id)}
+                          style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}
+                        >
+                          <div>
+                            <h4 style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--primary)' }}>{prodName}</h4>
+                            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '0.25rem', fontSize: '0.8rem', opacity: 0.7 }}>
+                              <span>ID: {order._id}</span>
+                              <span>•</span>
+                              <span>{new Date(order.createdAt).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                          
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                            <div style={{ textAlign: 'right' }}>
+                              <strong style={{ fontSize: '1.15rem', display: 'block' }}>Rs. {order.amount.toLocaleString()}</strong>
+                              <span style={{ 
+                                fontSize: '0.75rem', 
+                                background: order.deliveryStatus === 'Delivered' ? 'rgba(15, 110, 71, 0.1)' : 'rgba(194, 125, 56, 0.1)', 
+                                color: order.deliveryStatus === 'Delivered' ? 'var(--primary)' : 'var(--secondary)', 
+                                padding: '0.15rem 0.5rem', 
+                                borderRadius: '9999px', 
+                                fontWeight: 700 
+                              }}>
+                                {t(`status${order.deliveryStatus}`)}
+                              </span>
+                            </div>
+                            <span style={{ fontSize: '1.1rem', opacity: 0.6, fontWeight: 'bold' }}>
+                              {isExpanded ? '▲' : '▼'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Collapsible content */}
+                        {isExpanded && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', borderTop: '1px solid var(--border-light)', paddingTop: '1rem', animation: 'fadeIn 0.2s ease-out' }}>
+                            
+                            {/* Details Grid */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', fontSize: '0.85rem', background: 'rgba(0,0,0,0.02)', padding: '0.85rem', borderRadius: '0.5rem' }}>
+                              <div>
+                                <span style={{ opacity: 0.6, display: 'block', fontSize: '0.75rem' }}>BUYER CUSTOMER:</span>
+                                <strong>{order.buyerId.name} ({order.buyerId.phone})</strong>
+                              </div>
+                              <div>
+                                <span style={{ opacity: 0.6, display: 'block', fontSize: '0.75rem' }}>RECIPIENT NAME / CONTACT:</span>
+                                <strong>{order.recipientName || 'N/A'} ({order.recipientPhone || 'N/A'})</strong>
+                              </div>
+                              <div>
+                                <span style={{ opacity: 0.6, display: 'block', fontSize: '0.75rem' }}>PAYMENT DETAIL:</span>
+                                <strong>{order.paymentMethod} ({order.paymentStatus})</strong>
+                              </div>
+                              {order.notes && (
+                                <div>
+                                  <span style={{ opacity: 0.6, display: 'block', fontSize: '0.75rem' }}>CUSTOMER NOTES:</span>
+                                  <strong>{order.notes}</strong>
+                                </div>
+                              )}
+                              <div style={{ gridColumn: 'span 2' }}>
+                                <span style={{ opacity: 0.6, display: 'block', fontSize: '0.75rem' }}>SHIPPING ADDRESS:</span>
+                                <strong>{order.shippingAddress || 'N/A'}</strong>
+                              </div>
+                            </div>
+
+                            {/* Stepper progress representation */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 0', position: 'relative' }}>
+                              <div style={{ position: 'absolute', left: '5%', right: '5%', top: '50%', height: '3px', background: 'rgba(0,0,0,0.1)', zIndex: 1, transform: 'translateY(-50%)' }}></div>
+                              <div style={{ position: 'absolute', left: '5%', width: `${(currentStepIdx / 3) * 90}%`, top: '50%', height: '3px', background: 'var(--primary)', zIndex: 2, transform: 'translateY(-50%)', transition: 'width 0.5s ease' }}></div>
+
+                              {steps.map((step, idx) => {
+                                const isActive = idx <= currentStepIdx;
+                                const label = t(`status${step}`);
+                                return (
+                                  <div key={step} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 10, position: 'relative', flex: 1 }}>
+                                    <div style={{
+                                      width: '1.75rem',
+                                      height: '1.75rem',
+                                      borderRadius: '50%',
+                                      background: isActive ? 'var(--primary)' : 'white',
+                                      border: isActive ? 'none' : '2px solid rgba(0,0,0,0.15)',
+                                      color: isActive ? 'white' : 'rgba(0,0,0,0.4)',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontWeight: 700,
+                                      fontSize: '0.8rem',
+                                      boxShadow: 'var(--shadow-sm)'
+                                    }}>
+                                      {isActive ? <Check size={12} /> : idx + 1}
+                                    </div>
+                                    <span style={{ fontSize: '0.75rem', fontWeight: isActive ? 700 : 500, opacity: isActive ? 1 : 0.6, marginTop: '0.35rem' }}>
+                                      {label}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            {/* Shipment updates timeline logs */}
+                            <div style={{ borderTop: '1px dotted var(--border-light)', paddingTop: '0.5rem' }}>
+                              <strong style={{ fontSize: '0.85rem', display: 'block', marginBottom: '0.35rem', color: 'var(--primary)' }}>
+                                {language === 'en' ? 'Shipment Transit History Logs' : 'ٹرانزٹ شپمنٹ لاگ'}
+                              </strong>
+                              {!order.shipmentHistory || order.shipmentHistory.length === 0 ? (
+                                <p style={{ fontSize: '0.8rem', opacity: 0.6, fontStyle: 'italic' }}>
+                                  {language === 'en' ? 'No courier locations registered. Use the delivery agent portal to log updates.' : 'ابھی تک کوئی لاگ درج نہیں کیا گیا ہے۔'}
+                                </p>
+                              ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.35rem' }}>
+                                  {order.shipmentHistory.map((hist, hIdx) => (
+                                    <div key={hIdx} style={{ fontSize: '0.8rem', background: 'var(--input-bg)', padding: '0.5rem 0.75rem', borderRadius: '0.25rem', borderLeft: '3px solid var(--secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                      <div>
+                                        <strong>{hist.location}</strong>
+                                        {hist.status && <span style={{ opacity: 0.85, marginLeft: '0.5rem', fontSize: '0.75rem' }}>- {hist.status}</span>}
+                                      </div>
+                                      <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>{new Date(hist.timestamp).toLocaleString()}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Stepper advancement controls */}
+                            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', borderTop: '1px solid var(--border-light)', paddingTop: '0.75rem' }}>
+                              {order.deliveryStatus === 'Placed' && (
+                                <button onClick={() => updateDeliveryStatus(order._id, 'Packed')} className="btn btn-outline" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', borderRadius: '0.3rem' }}>
+                                  Mark Packed
+                                </button>
+                              )}
+                              {order.deliveryStatus === 'Packed' && (
+                                <button onClick={() => updateDeliveryStatus(order._id, 'Shipped')} className="btn btn-outline" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', borderRadius: '0.3rem' }}>
+                                  Mark Shipped
+                                </button>
+                              )}
+                            </div>
+
+                          </div>
+                        )}
+
+                      </div>
+                    );
+                  })
+                )}
               </div>
 
               {/* Sidebar Payout module */}
@@ -906,19 +1010,30 @@ export default function SellerDashboard() {
                     <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                       <span style={{ fontSize: '0.8rem', fontWeight: 700 }}>Request History</span>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: '180px', overflowY: 'auto' }}>
-                        {payoutHistory.map((req) => (
-                          <div key={req._id} style={{ background: 'var(--input-bg)', padding: '0.5rem', borderRadius: '0.25rem', fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div>
-                              <strong>Rs. {req.amount}</strong>
-                              <span style={{ display: 'block', opacity: 0.6, fontSize: '0.65rem' }}>{new Date(req.createdAt).toLocaleDateString()}</span>
+                         {payoutHistory.map((req) => (
+                          <div key={req._id} style={{ background: 'var(--input-bg)', padding: '0.5rem', borderRadius: '0.25rem', fontSize: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div>
+                                <strong>Rs. {req.amount}</strong>
+                                <span style={{ display: 'block', opacity: 0.6, fontSize: '0.65rem' }}>{new Date(req.createdAt).toLocaleDateString()}</span>
+                              </div>
+                              <span style={{
+                                padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700, fontSize: '0.65rem',
+                                background: req.status === 'Approved' ? 'rgba(15, 110, 71, 0.1)' : req.status === 'Rejected' ? 'rgba(220, 38, 38, 0.1)' : 'rgba(217, 119, 6, 0.1)',
+                                color: req.status === 'Approved' ? 'var(--primary)' : req.status === 'Rejected' ? 'var(--accent)' : 'var(--secondary)'
+                              }}>
+                                {req.status}
+                              </span>
                             </div>
-                            <span style={{
-                              padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700, fontSize: '0.65rem',
-                              background: req.status === 'Approved' ? 'rgba(15, 110, 71, 0.1)' : req.status === 'Rejected' ? 'rgba(220, 38, 38, 0.1)' : 'rgba(217, 119, 6, 0.1)',
-                              color: req.status === 'Approved' ? 'var(--primary)' : req.status === 'Rejected' ? 'var(--accent)' : 'var(--secondary)'
-                            }}>
-                              {req.status}
-                            </span>
+                            
+                            {/* Approved Payout Transaction reference details */}
+                            {req.status === 'Approved' && (req.transactionId || req.transactionDetails) && (
+                              <div style={{ padding: '0.35rem', background: 'rgba(10,77,52,0.04)', borderRadius: '0.2rem', marginTop: '0.25rem', fontSize: '0.7rem', display: 'flex', flexDirection: 'column', gap: '0.1rem', borderLeft: '2px solid var(--primary)' }}>
+                                {req.transactionId && <div>Tx ID: <strong>{req.transactionId}</strong></div>}
+                                {req.transactionDetails && <div>Details: {req.transactionDetails}</div>}
+                                {req.resolvedAt && <div>Sent: {new Date(req.resolvedAt).toLocaleDateString()}</div>}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

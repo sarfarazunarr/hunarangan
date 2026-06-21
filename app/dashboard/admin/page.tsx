@@ -29,6 +29,9 @@ export default function AdminDisputePanel() {
   const [payouts, setPayouts] = useState<any[]>([]);
   const [isPayoutLoading, setIsPayoutLoading] = useState(false);
   const [isResolvingPayout, setIsResolvingPayout] = useState(false);
+  const [approvingPayoutId, setApprovingPayoutId] = useState<string | null>(null);
+  const [txIdInput, setTxIdInput] = useState('');
+  const [txDetailsInput, setTxDetailsInput] = useState('');
 
   // Investment states
   const [investments, setInvestments] = useState<any[]>([]);
@@ -99,13 +102,13 @@ export default function AdminDisputePanel() {
     fetchInvestments();
   }, []);
 
-  const handleResolvePayout = async (requestId: string, status: 'Approved' | 'Rejected') => {
+  const handleResolvePayout = async (requestId: string, status: 'Approved' | 'Rejected', transactionId = '', transactionDetails = '') => {
     setIsResolvingPayout(true);
     try {
       const res = await fetch('/api/payouts', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requestId, status })
+        body: JSON.stringify({ requestId, status, transactionId, transactionDetails })
       });
       if (res.ok) {
         showSuccessToast(`Payout request ${status.toLowerCase()} successfully!`);
@@ -425,41 +428,105 @@ export default function AdminDisputePanel() {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   {payouts.filter(p => p.status === 'Pending').map((req) => (
-                    <div key={req._id} className="glass-card" style={{ padding: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.5rem' }}>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <strong style={{ fontSize: '1.1rem' }}>Rs. {req.amount.toLocaleString()}</strong>
-                          <span style={{ fontSize: '0.75rem', background: 'rgba(217, 119, 6, 0.1)', color: 'var(--secondary)', padding: '0.15rem 0.5rem', borderRadius: '9999px', fontWeight: 700 }}>
-                            Pending Approval
-                          </span>
+                    <div key={req._id} className="glass-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.5rem', width: '100%' }}>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <strong style={{ fontSize: '1.1rem' }}>Rs. {req.amount.toLocaleString()}</strong>
+                            <span style={{ fontSize: '0.75rem', background: 'rgba(217, 119, 6, 0.1)', color: 'var(--secondary)', padding: '0.15rem 0.5rem', borderRadius: '9999px', fontWeight: 700 }}>
+                              Pending Approval
+                            </span>
+                          </div>
+                          <p style={{ fontSize: '0.85rem', marginTop: '0.25rem', opacity: 0.8 }}>
+                            Seller: <strong>{req.sellerId?.name || 'Unknown'}</strong> ({req.sellerId?.phone || 'No phone'}) - {req.sellerId?.location || 'No location'}
+                          </p>
+                          <p style={{ fontSize: '0.85rem', marginTop: '0.25rem', padding: '0.5rem', background: 'var(--input-bg)', borderRadius: '0.25rem', fontFamily: 'monospace' }}>
+                            Payment Details: {req.paymentDetails}
+                          </p>
+                          <span style={{ fontSize: '0.75rem', opacity: 0.5 }}>Requested: {new Date(req.createdAt).toLocaleString()}</span>
                         </div>
-                        <p style={{ fontSize: '0.85rem', marginTop: '0.25rem', opacity: 0.8 }}>
-                          Seller: <strong>{req.sellerId?.name || 'Unknown'}</strong> ({req.sellerId?.phone || 'No phone'}) - {req.sellerId?.location || 'No location'}
-                        </p>
-                        <p style={{ fontSize: '0.85rem', marginTop: '0.25rem', padding: '0.5rem', background: 'var(--input-bg)', borderRadius: '0.25rem', fontFamily: 'monospace' }}>
-                          Payment Details: {req.paymentDetails}
-                        </p>
-                        <span style={{ fontSize: '0.75rem', opacity: 0.5 }}>Requested: {new Date(req.createdAt).toLocaleString()}</span>
+                        
+                        {approvingPayoutId !== req._id && (
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button
+                              onClick={() => handleResolvePayout(req._id, 'Rejected')}
+                              disabled={isResolvingPayout}
+                              className="btn"
+                              style={{ background: 'rgba(220, 38, 38, 0.1)', color: 'var(--accent)', padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                            >
+                              Reject
+                            </button>
+                            <button
+                              onClick={() => {
+                                setApprovingPayoutId(req._id);
+                                setTxIdInput('');
+                                setTxDetailsInput('');
+                              }}
+                              disabled={isResolvingPayout}
+                              className="btn btn-primary"
+                              style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                            >
+                              Approve & Send
+                            </button>
+                          </div>
+                        )}
                       </div>
-                      
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button
-                          onClick={() => handleResolvePayout(req._id, 'Rejected')}
-                          disabled={isResolvingPayout}
-                          className="btn"
-                          style={{ background: 'rgba(220, 38, 38, 0.1)', color: 'var(--accent)', padding: '0.5rem 1rem', fontSize: '0.85rem' }}
-                        >
-                          Reject
-                        </button>
-                        <button
-                          onClick={() => handleResolvePayout(req._id, 'Approved')}
-                          disabled={isResolvingPayout}
-                          className="btn btn-primary"
-                          style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
-                        >
-                          Approve & Send
-                        </button>
-                      </div>
+
+                      {/* Inline form to enter Transaction audit details on approval */}
+                      {approvingPayoutId === req._id && (
+                        <div style={{ borderTop: '1px dashed var(--border-light)', paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.5rem', width: '100%' }}>
+                          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--primary)' }}>Enter Transaction Reference Details</span>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '0.75rem' }} className="admin-grid-layout">
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                              <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Transaction Reference ID <span style={{ color: 'var(--accent)' }}>*</span></label>
+                              <input
+                                type="text"
+                                placeholder="e.g. EP-10023458992"
+                                value={txIdInput}
+                                onChange={(e) => setTxIdInput(e.target.value)}
+                                style={{ padding: '0.5rem', fontSize: '0.85rem', borderRadius: '0.25rem', border: '1px solid var(--border)' }}
+                                required
+                              />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                              <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Payment Sent Details / Reference Message</label>
+                              <input
+                                type="text"
+                                placeholder="e.g. Sent via EasyPaisa to account 03001234567"
+                                value={txDetailsInput}
+                                onChange={(e) => setTxDetailsInput(e.target.value)}
+                                style={{ padding: '0.5rem', fontSize: '0.85rem', borderRadius: '0.25rem', border: '1px solid var(--border)' }}
+                              />
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
+                            <button
+                              onClick={() => {
+                                setApprovingPayoutId(null);
+                                setTxIdInput('');
+                                setTxDetailsInput('');
+                              }}
+                              className="btn btn-outline"
+                              style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', borderRadius: '0.25rem' }}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleResolvePayout(req._id, 'Approved', txIdInput, txDetailsInput);
+                                setApprovingPayoutId(null);
+                                setTxIdInput('');
+                                setTxDetailsInput('');
+                              }}
+                              className="btn btn-primary"
+                              style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', borderRadius: '0.25rem' }}
+                              disabled={!txIdInput.trim() || isResolvingPayout}
+                            >
+                              Confirm Approval & Send
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -479,6 +546,7 @@ export default function AdminDisputePanel() {
                         <th style={{ padding: '0.75rem' }}>Artisan</th>
                         <th style={{ padding: '0.75rem' }}>Amount</th>
                         <th style={{ padding: '0.75rem' }}>Method Details</th>
+                        <th style={{ padding: '0.75rem' }}>Transaction Details</th>
                         <th style={{ padding: '0.75rem' }}>Requested Date</th>
                         <th style={{ padding: '0.75rem' }}>Status</th>
                         <th style={{ padding: '0.75rem' }}>Resolved Date</th>
@@ -490,6 +558,16 @@ export default function AdminDisputePanel() {
                           <td style={{ padding: '0.75rem' }}><strong>{req.sellerId?.name || 'Unknown'}</strong></td>
                           <td style={{ padding: '0.75rem' }}>Rs. {req.amount}</td>
                           <td style={{ padding: '0.75rem', fontFamily: 'monospace' }}>{req.paymentDetails}</td>
+                          <td style={{ padding: '0.75rem' }}>
+                            {req.status === 'Approved' ? (
+                              req.transactionId ? (
+                                <div style={{ fontSize: '0.8rem' }}>
+                                  ID: <strong>{req.transactionId}</strong>
+                                  {req.transactionDetails && <span style={{ display: 'block', opacity: 0.7, fontSize: '0.75rem' }}>{req.transactionDetails}</span>}
+                                </div>
+                              ) : 'N/A'
+                            ) : '-'}
+                          </td>
                           <td style={{ padding: '0.75rem' }}>{new Date(req.createdAt).toLocaleDateString()}</td>
                           <td style={{ padding: '0.75rem' }}>
                             <span style={{

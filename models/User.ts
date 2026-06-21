@@ -20,6 +20,7 @@ export interface IUser extends Document {
   tempOtp?: string;
   tempOtpExpiry?: Date;
   tempOtpSmsId?: string;
+  favorites?: mongoose.Types.ObjectId[];
   createdAt: Date;
 }
 
@@ -43,6 +44,7 @@ const UserSchema = new Schema<IUser>({
   tempOtp: { type: String },
   tempOtpExpiry: { type: Date },
   tempOtpSmsId: { type: String },
+  favorites: [{ type: Schema.Types.ObjectId, ref: 'Product' }],
   createdAt: { type: Date, default: Date.now },
 });
 
