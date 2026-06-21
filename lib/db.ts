@@ -1,5 +1,13 @@
 import mongoose from 'mongoose';
 
+// Pre-register all schemas for references / populations
+import '@/models/User';
+import '@/models/Product';
+import '@/models/Order';
+import '@/models/PayoutRequest';
+import '@/models/InvestmentRequest';
+import '@/models/ChatRoom';
+
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/hunarangan';
 
 if (!MONGODB_URI) {
