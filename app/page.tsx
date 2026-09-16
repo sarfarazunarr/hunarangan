@@ -144,20 +144,7 @@ export default function HomePage() {
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery.trim()) return;
-    const query = searchQuery.toLowerCase();
-    
-    // Redirect to proper category pages
-    if (query.includes('ajrak') || query.includes('اجرک')) {
-      router.push('/categories/Ajrak');
-    } else if (query.includes('rilli') || query.includes('رلی') || query.includes('patchwork')) {
-      router.push('/categories/Rilli');
-    } else if (query.includes('biryani') || query.includes('food') || query.includes('khana') || query.includes('برياني')) {
-      router.push('/categories/Food');
-    } else if (query.includes('embroidery') || query.includes('kadhai') || query.includes('کڑھائی')) {
-      router.push('/categories/Embroidery');
-    } else if (query.includes('handicraft') || query.includes('mitti') || query.includes('دستکاری')) {
-      router.push('/categories/Handicrafts');
-    }
+    router.push(`/categories?search=${encodeURIComponent(searchQuery.trim())}`);
   };
 
   const getHeroTitle = () => {

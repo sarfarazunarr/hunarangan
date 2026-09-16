@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useLanguage } from '@/context/LanguageContext';
-import { Sparkles, MapPin, Layers, Package, HelpCircle, User, Grid, Scissors, Utensils, Palette, Gift } from 'lucide-react';
+import { Sparkles, MapPin, Layers, Package, HelpCircle, User, Grid, Scissors, Utensils, Palette, Gift, Search } from 'lucide-react';
 
 interface ProductItem {
   _id: string;
@@ -18,13 +19,23 @@ interface ProductItem {
   };
 }
 
-export default function CategoriesPage() {
+function CategoriesContent() {
   const { language, t, dir } = useLanguage();
+  const searchParams = useSearchParams();
+  const initialSearch = searchParams.get('search') || '';
 
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [filterCustom, setFilterCustom] = useState<'all' | 'ready' | 'custom'>('all');
   const [activeCategory, setActiveCategory] = useState('All');
+  const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const q = searchParams.get('search');
+    if (q !== null) {
+      setSearchQuery(q);
+    }
+  }, [searchParams]);
 
   // Platform standard categories
   const standardCategories = [
@@ -140,11 +151,31 @@ export default function CategoriesPage() {
     fetchFilteredProducts();
   }, [activeCategory, filterCustom]);
 
+  const displayProducts = products.filter((product) => {
+    if (!searchQuery.trim()) return true;
+    const search = searchQuery.toLowerCase().trim();
+    const titleEn = (product.title?.en || '').toLowerCase();
+    const titleUr = (product.title?.ur || '').toLowerCase();
+    const titleSd = (product.title?.sd || '').toLowerCase();
+    const cat = (product.category || '').toLowerCase();
+    const seller = (product.sellerId?.name || '').toLowerCase();
+    const loc = (product.sellerId?.location || '').toLowerCase();
+
+    return (
+      titleEn.includes(search) ||
+      titleUr.includes(search) ||
+      titleSd.includes(search) ||
+      cat.includes(search) ||
+      seller.includes(search) ||
+      loc.includes(search)
+    );
+  });
+
   return (
     <div className="container" style={{ direction: dir, marginTop: '1.5rem' }}>
       
       {/* Page Header */}
-      <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+      <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
         <h1 style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--primary)' }}>
           {language === 'en' ? 'Explore Art & Skills' : language === 'ur' ? 'ہنر اور فن کی تلاش' : 'هنر ۽ فن جي ڳولا'}
         </h1>
@@ -153,6 +184,28 @@ export default function CategoriesPage() {
             ? 'Browse standard collections or artisan-created micro-niches near you.' 
             : 'روایتی ڈیزائن یا کاریگروں کے اپنے مخصوص ہنر دریافت کریں۔'}
         </p>
+
+        {/* Live Search Bar */}
+        <div style={{ maxWidth: '550px', margin: '1.25rem auto 0 auto', position: 'relative', display: 'flex', alignItems: 'center' }}>
+          <span style={{ position: 'absolute', [dir === 'ltr' ? 'left' : 'right']: '1rem', opacity: 0.5 }}>
+            <Search size={18} />
+          </span>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t('searchPlaceholder')}
+            style={{
+              width: '100%',
+              padding: dir === 'ltr' ? '0.75rem 1rem 0.75rem 2.8rem' : '0.75rem 2.8rem 0.75rem 1rem',
+              borderRadius: '9999px',
+              border: '1px solid var(--border)',
+              fontSize: '0.95rem',
+              outline: 'none',
+              background: 'var(--input-bg)'
+            }}
+          />
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', gap: '2rem', flexWrap: 'wrap' }} className="responsive-layout">
@@ -164,7 +217,10 @@ export default function CategoriesPage() {
             {standardCategories.map((cat) => (
               <button
                 key={cat.name}
-                onClick={() => setActiveCategory(cat.name)}
+                onClick={() => {
+                  setActiveCategory(cat.name);
+                  setSearchQuery('');
+                }}
                 style={{
                   padding: '0.6rem 1.2rem',
                   borderRadius: '9999px',
@@ -255,15 +311,15 @@ export default function CategoriesPage() {
             <div style={{ textAlign: 'center', padding: '3rem' }}>
               <div className="spinner"></div>
             </div>
-          ) : products.length === 0 ? (
+          ) : displayProducts.length === 0 ? (
             <div style={{ padding: '3rem', textAlign: 'center', background: 'rgba(0,0,0,0.02)', borderRadius: '1rem' }}>
               <p style={{ opacity: 0.6, fontSize: '1.1rem', fontWeight: 600 }}>
-                {language === 'en' ? 'No items found matching the filter.' : 'اس زمرے میں کوئی مصنوعات نہیں ملیں۔'}
+                {language === 'en' ? 'No items found matching the search.' : 'کوئی پروڈکٹ نہیں ملی۔'}
               </p>
             </div>
           ) : (
             <div className="discovery-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
-              {products.map((product) => (
+              {displayProducts.map((product) => (
                 <div key={product._id} className="product-card" style={{ display: 'flex', flexDirection: 'column' }}>
                   <div style={{ height: '180px', overflow: 'hidden', position: 'relative' }}>
                     <img src={product.images[0]} alt={product.title.en} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -282,7 +338,7 @@ export default function CategoriesPage() {
                       <span style={{ fontSize: '0.8rem', display: 'flex', gap: '0.25rem', opacity: 0.7 }}><MapPin size={12} />{product.sellerId.location}</span>
                     </div>
                     <Link href={`/product/${product._id}`} className="btn btn-outline" style={{ width: '100%', padding: '0.4rem', fontSize: '0.85rem', marginTop: '0.5rem' }}>
-                      {language === 'en' ? 'View details' : 'تفصیلات'}
+                      {t('viewDetailsBtn')}
                     </Link>
                   </div>
                 </div>
@@ -309,7 +365,10 @@ export default function CategoriesPage() {
               {userMicroNiches.map((niche) => (
                 <button
                   key={niche.name}
-                  onClick={() => setActiveCategory(niche.name)}
+                  onClick={() => {
+                    setActiveCategory(niche.name);
+                    setSearchQuery('');
+                  }}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -358,5 +417,13 @@ export default function CategoriesPage() {
         }
       `}</style>
     </div>
+  );
+}
+
+export default function CategoriesPage() {
+  return (
+    <Suspense fallback={<div style={{ textAlign: 'center', padding: '3rem' }}><div className="spinner" style={{ margin: '0 auto' }}></div></div>}>
+      <CategoriesContent />
+    </Suspense>
   );
 }

@@ -13,9 +13,10 @@ export default function LoginPage() {
   // Navigation Steps
   // 1: Phone input
   // 2: PIN input (for users with established PINs)
-  // 3: First-time OTP Verification + PIN Setup (for registration/first-time login)
-  // 4: Reset PIN OTP Verification + PIN Configuration (for locked-out/forgot PIN flows)
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  // 3: First-time OTP Verification + PIN Setup
+  // 4: Reset PIN OTP Verification
+  // 5: Dedicated Registration & Profile Details Form
+  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
 
   // Input states
   const [phone, setPhone] = useState('');
@@ -26,10 +27,12 @@ export default function LoginPage() {
   
   // Registration setup states
   const [isNewUser, setIsNewUser] = useState(false);
+  const [verifiedUserData, setVerifiedUserData] = useState<any>(null);
   const [name, setName] = useState('');
   const [role, setRole] = useState<'buyer' | 'seller'>('buyer');
   const [location, setLocation] = useState('Karachi');
   const [gender, setGender] = useState<'male' | 'female' | ''>('');
+  const [bio, setBio] = useState('');
 
   // UI state
   const [isLoading, setIsLoading] = useState(false);
@@ -210,18 +213,6 @@ export default function LoginPage() {
       targetPin = newPin;
     }
 
-    if (isNewUser && !gender) {
-      setError(language === 'en' ? 'Please select your gender.' : 'براہ کرم اپنی جنس منتخب کریں۔');
-      return;
-    }
-
-    if (isNewUser && role === 'seller' && gender !== 'female') {
-      setError(language === 'en'
-        ? 'Only female artisans can register as sellers on HunarAangan.'
-        : 'ہنر آنگن پر صرف خواتین کاریگر ہی سیلر کے طور پر رجسٹر ہو سکتی ہیں۔');
-      return;
-    }
-
     setIsLoading(true);
     setError('');
 
@@ -235,44 +226,83 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (res.ok && data.success) {
-        // Step 2: Complete profile if it's registration
+        setVerifiedUserData(data.user);
         if (isNewUser) {
-          const profileRes = await fetch('/api/profile', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userId: data.user.id,
-              name: name || `User_${phone.slice(-4)}`,
-              location,
-              gender,
-              role
-            })
-          });
-          const profileData = await profileRes.json();
-          if (profileRes.ok && profileData.success) {
-            data.user = { 
-              ...data.user, 
-              name: profileData.user.name, 
-              location: profileData.user.location,
-              gender: profileData.user.gender,
-              role: profileData.user.role
-            };
-          }
-        }
-
-        localStorage.setItem('hunarangan-user', JSON.stringify(data.user));
-        window.dispatchEvent(new Event('auth-change'));
-        
-        if (data.user.role === 'seller') {
-          router.push('/dashboard/seller?tab=profile');
+          // Advance to Step 5 dedicated registration form
+          setStep(5);
+          setSuccessMsg(language === 'en' ? '✓ OTP verified! Please enter your profile details.' : '✓ او ٹی پی تصدیق ہو گیا۔ اپنی تفصیلات درج کریں');
         } else {
-          router.push('/dashboard/buyer?tab=profile');
+          localStorage.setItem('hunarangan-user', JSON.stringify(data.user));
+          window.dispatchEvent(new Event('auth-change'));
+          
+          if (data.user.role === 'seller') {
+            router.push('/dashboard/seller');
+          } else {
+            router.push('/');
+          }
         }
       } else {
         setError(data.error || 'Verification failed.');
       }
     } catch (e) {
       setError('Verification failed. Try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Step 5: Complete Registration Details Submission
+  const handleCompleteRegistration = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) {
+      setError(language === 'en' ? 'Please enter your full name.' : 'براہ کرم اپنا پورا نام درج کریں۔');
+      return;
+    }
+    if (!gender) {
+      setError(language === 'en' ? 'Please select your gender.' : 'براہ کرم اپنی جنس منتخب کریں۔');
+      return;
+    }
+    if (role === 'seller' && gender !== 'female') {
+      setError(language === 'en'
+        ? 'Only female artisans can register as sellers on HunarAangan.'
+        : 'ہنر آنگن پر صرف خواتین کاریگر ہی سیلر کے طور پر رجسٹر ہو سکتی ہیں۔');
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const uId = verifiedUserData?.id || verifiedUserData?._id;
+      const profileRes = await fetch('/api/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: uId,
+          name: name.trim(),
+          location,
+          gender,
+          role,
+          bio: bio.trim() || ''
+        })
+      });
+      const profileData = await profileRes.json();
+
+      if (profileRes.ok && profileData.success) {
+        const finalUser = profileData.user;
+        localStorage.setItem('hunarangan-user', JSON.stringify(finalUser));
+        window.dispatchEvent(new Event('auth-change'));
+
+        if (finalUser.role === 'seller') {
+          router.push('/dashboard/seller?tab=profile');
+        } else {
+          router.push('/dashboard/buyer?tab=profile');
+        }
+      } else {
+        setError(profileData.error || 'Failed to save registration profile.');
+      }
+    } catch (err) {
+      setError('Registration failed. Try again.');
     } finally {
       setIsLoading(false);
     }
@@ -354,11 +384,13 @@ export default function LoginPage() {
             {step === 2 && (language === 'en' ? 'Enter Security PIN' : 'سیکیورٹی پن درج کریں')}
             {step === 3 && (language === 'en' ? 'Verify & Setup PIN' : 'تصدیق اور پن سیٹ اپ')}
             {step === 4 && (language === 'en' ? 'Reset Security PIN' : 'پن کوڈ ری سیٹ کریں')}
+            {step === 5 && t('registerTitle')}
           </h2>
           <p style={{ opacity: 0.7, fontSize: '0.95rem', marginTop: '0.25rem' }}>
             {step === 1 && t('tagline')}
             {step === 2 && (language === 'en' ? `Enter secure login PIN for ${phone}` : `اپنا سیکیورٹی لاگ ان پن کوڈ درج کریں`)}
             {(step === 3 || step === 4) && (language === 'en' ? `Enter 6-digit OTP code sent to ${phone}` : `اپنے نمبر پر موصولہ 6 ہندسوں کا کوڈ درج کریں`)}
+            {step === 5 && t('registerSubtitle')}
           </p>
         </div>
 
@@ -555,155 +587,9 @@ export default function LoginPage() {
               )}
             </div>
 
-            {/* Complete setup info if registration */}
-            {isNewUser && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', borderTop: '1px solid var(--border-light)', paddingTop: '1rem', marginTop: '0.25rem' }}>
-                <h4 style={{ fontWeight: 700, fontSize: '0.95rem' }}>
-                  {language === 'en' ? 'Complete Profile Setup' : 'پروفائل سیٹ اپ کریں'}
-                </h4>
-                
-                {/* Name */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>{language === 'en' ? 'Full Name' : 'پورا نام'}</label>
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <UserIcon size={16} style={{ position: 'absolute', [dir === 'ltr' ? 'left' : 'right']: '0.75rem', opacity: 0.5 }} />
-                    <input
-                      type="text"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="e.g. Zainab Bibi"
-                      style={{
-                        width: '100%',
-                        padding: '0.6rem 0.8rem 0.6rem 2.4rem',
-                        borderRadius: '0.5rem',
-                        border: '1px solid var(--border-light)',
-                        fontSize: '0.9rem',
-                        outline: 'none',
-                        paddingLeft: dir === 'ltr' ? '2.4rem' : '0.8rem',
-                        paddingRight: dir === 'ltr' ? '0.8rem' : '2.4rem'
-                      }}
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Location */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>{language === 'en' ? 'City' : 'شہر'}</label>
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <MapPin size={16} style={{ position: 'absolute', [dir === 'ltr' ? 'left' : 'right']: '0.75rem', opacity: 0.5 }} />
-                    <select
-                      value={location}
-                      onChange={(e) => setLocation(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '0.6rem 0.8rem 0.6rem 2.4rem',
-                        borderRadius: '0.5rem',
-                        border: '1px solid var(--border-light)',
-                        fontSize: '0.9rem',
-                        outline: 'none',
-                        background: 'white',
-                        paddingLeft: dir === 'ltr' ? '2.4rem' : '0.8rem',
-                        paddingRight: dir === 'ltr' ? '0.8rem' : '2.4rem'
-                      }}
-                    >
-                      {cities.map(city => (
-                        <option key={city} value={city}>{city}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Gender */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>{language === 'en' ? 'Gender' : 'جنس'}</label>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button
-                      type="button"
-                      onClick={() => setGender('female')}
-                      style={{
-                        flex: 1,
-                        padding: '0.5rem',
-                        borderRadius: '0.5rem',
-                        border: gender === 'female' ? '2px solid var(--primary)' : '1px solid var(--border-light)',
-                        background: gender === 'female' ? 'rgba(15, 110, 71, 0.05)' : 'transparent',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        fontSize: '0.85rem'
-                      }}
-                    >
-                      {language === 'en' ? 'Female (خواتین)' : 'خاتون'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setGender('male')}
-                      style={{
-                        flex: 1,
-                        padding: '0.5rem',
-                        borderRadius: '0.5rem',
-                        border: gender === 'male' ? '2px solid var(--primary)' : '1px solid var(--border-light)',
-                        background: gender === 'male' ? 'rgba(15, 110, 71, 0.05)' : 'transparent',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        fontSize: '0.85rem'
-                      }}
-                    >
-                      {language === 'en' ? 'Male (مرد)' : 'مرد'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Role */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>{language === 'en' ? 'Register As' : 'اکاؤنٹ کی قسم'}</label>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button
-                      type="button"
-                      onClick={() => setRole('buyer')}
-                      style={{
-                        flex: 1,
-                        padding: '0.5rem',
-                        borderRadius: '0.5rem',
-                        border: role === 'buyer' ? '2px solid var(--primary)' : '1px solid var(--border-light)',
-                        background: role === 'buyer' ? 'rgba(15, 110, 71, 0.05)' : 'transparent',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        fontSize: '0.85rem'
-                      }}
-                    >
-                      {language === 'en' ? 'Buyer (خریداری)' : 'خریدار'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setRole('seller')}
-                      style={{
-                        flex: 1,
-                        padding: '0.5rem',
-                        borderRadius: '0.5rem',
-                        border: role === 'seller' ? '2px solid var(--primary)' : '1px solid var(--border-light)',
-                        background: role === 'seller' ? 'rgba(15, 110, 71, 0.05)' : 'transparent',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        fontSize: '0.85rem'
-                      }}
-                    >
-                      {language === 'en' ? 'Artisan / Seller' : 'کاریگر / سیلر'}
-                    </button>
-                  </div>
-                  {role === 'seller' && (
-                    <span style={{ fontSize: '0.75rem', color: 'var(--accent)', fontWeight: 600, marginTop: '0.25rem' }}>
-                      {language === 'en'
-                        ? 'Please note: Only women artisans can register as sellers to list their handmade products.'
-                        : 'نوٹ: صرف خواتین کاریگر ہی مصنوعات فروخت کرنے کے لیے سیلر کے طور پر رجسٹر ہو سکتی ہیں۔'}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-
             <button type="submit" disabled={isLoading} className="btn btn-primary" style={{ width: '100%', padding: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center', justifyContent: 'center' }}>
               <CheckCircle size={18} />
-              <span>{isLoading ? '...' : (language === 'en' ? 'Verify & Setup' : 'تصدیق اور سیٹ اپ')}</span>
+              <span>{isLoading ? '...' : (language === 'en' ? 'Verify OTP & Continue' : 'او ٹی پی کی تصدیق کریں')}</span>
             </button>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem', fontSize: '0.85rem' }}>
@@ -714,6 +600,172 @@ export default function LoginPage() {
                 {language === 'en' ? 'Back' : 'پیچھے'}
               </button>
             </div>
+          </form>
+        )}
+
+        {/* STEP 5: Dedicated Registration & Profile Form */}
+        {step === 5 && (
+          <form onSubmit={handleCompleteRegistration} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            
+            {/* Full Name */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              <label style={{ fontSize: '0.9rem', fontWeight: 600 }}>{t('fullName')}</label>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <UserIcon size={18} style={{ position: 'absolute', [dir === 'ltr' ? 'left' : 'right']: '0.8rem', opacity: 0.5 }} />
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Zainab Bibi"
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem 0.8rem 0.75rem 2.5rem',
+                    borderRadius: '0.6rem',
+                    border: '1px solid var(--border-light)',
+                    fontSize: '0.95rem',
+                    outline: 'none',
+                    paddingLeft: dir === 'ltr' ? '2.5rem' : '0.8rem',
+                    paddingRight: dir === 'ltr' ? '0.8rem' : '2.5rem'
+                  }}
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Account Type (Buyer / Seller) */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              <label style={{ fontSize: '0.9rem', fontWeight: 600 }}>{t('accountType')}</label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setRole('buyer')}
+                  style={{
+                    flex: 1,
+                    padding: '0.6rem',
+                    borderRadius: '0.6rem',
+                    border: role === 'buyer' ? '2px solid var(--primary)' : '1px solid var(--border-light)',
+                    background: role === 'buyer' ? 'rgba(15, 110, 71, 0.08)' : 'transparent',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontSize: '0.85rem'
+                  }}
+                >
+                  {t('buyerRole')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRole('seller')}
+                  style={{
+                    flex: 1,
+                    padding: '0.6rem',
+                    borderRadius: '0.6rem',
+                    border: role === 'seller' ? '2px solid var(--primary)' : '1px solid var(--border-light)',
+                    background: role === 'seller' ? 'rgba(15, 110, 71, 0.08)' : 'transparent',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontSize: '0.85rem'
+                  }}
+                >
+                  {t('sellerRole')}
+                </button>
+              </div>
+              {role === 'seller' && (
+                <span style={{ fontSize: '0.78rem', color: 'var(--accent)', fontWeight: 600, marginTop: '0.2rem' }}>
+                  {t('womenOnlyNotice')}
+                </span>
+              )}
+            </div>
+
+            {/* Gender */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              <label style={{ fontSize: '0.9rem', fontWeight: 600 }}>{t('genderLabel')}</label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setGender('female')}
+                  style={{
+                    flex: 1,
+                    padding: '0.6rem',
+                    borderRadius: '0.6rem',
+                    border: gender === 'female' ? '2px solid var(--primary)' : '1px solid var(--border-light)',
+                    background: gender === 'female' ? 'rgba(15, 110, 71, 0.08)' : 'transparent',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontSize: '0.85rem'
+                  }}
+                >
+                  {t('female')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGender('male')}
+                  style={{
+                    flex: 1,
+                    padding: '0.6rem',
+                    borderRadius: '0.6rem',
+                    border: gender === 'male' ? '2px solid var(--primary)' : '1px solid var(--border-light)',
+                    background: gender === 'male' ? 'rgba(15, 110, 71, 0.08)' : 'transparent',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontSize: '0.85rem'
+                  }}
+                >
+                  {t('male')}
+                </button>
+              </div>
+            </div>
+
+            {/* City */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              <label style={{ fontSize: '0.9rem', fontWeight: 600 }}>{t('cityLabel')}</label>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <MapPin size={18} style={{ position: 'absolute', [dir === 'ltr' ? 'left' : 'right']: '0.8rem', opacity: 0.5 }} />
+                <select
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem 0.8rem 0.75rem 2.5rem',
+                    borderRadius: '0.6rem',
+                    border: '1px solid var(--border-light)',
+                    fontSize: '0.95rem',
+                    outline: 'none',
+                    background: 'var(--card)',
+                    paddingLeft: dir === 'ltr' ? '2.5rem' : '0.8rem',
+                    paddingRight: dir === 'ltr' ? '0.8rem' : '2.5rem'
+                  }}
+                >
+                  {cities.map(city => (
+                    <option key={city} value={city}>{city}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Bio */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              <label style={{ fontSize: '0.9rem', fontWeight: 600 }}>{t('bioLabel')}</label>
+              <textarea
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                placeholder={language === 'en' ? 'Tell buyers about your craft or skills...' : 'اپنے ہنر یا دکان کے بارے میں بتائیں...'}
+                rows={3}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  borderRadius: '0.6rem',
+                  border: '1px solid var(--border-light)',
+                  fontSize: '0.9rem',
+                  outline: 'none',
+                  resize: 'none'
+                }}
+              />
+            </div>
+
+            <button type="submit" disabled={isLoading} className="btn btn-primary" style={{ width: '100%', padding: '1rem', marginTop: '0.5rem', display: 'flex', gap: '0.5rem', alignItems: 'center', justifyContent: 'center' }}>
+              <CheckCircle size={18} />
+              <span>{isLoading ? '...' : t('completeRegistrationBtn')}</span>
+            </button>
           </form>
         )}
 

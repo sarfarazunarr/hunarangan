@@ -3,17 +3,27 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useLanguage, Language } from '../context/LanguageContext';
-import { ShoppingBag, User, LogOut, Menu, X, Sun, Moon } from 'lucide-react';
+import { ShoppingBag, User, LogOut, Menu, X, Sun, Moon, Search } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 export default function Header() {
   const { language, setLanguage, t, dir } = useLanguage();
+  const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userRole, setUserRole] = useState<'buyer' | 'seller' | 'admin'>('buyer');
   const [userName, setUserName] = useState('');
+  const [navSearch, setNavSearch] = useState('');
   
   // Theme State (Lite-First by default)
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+
+  const handleHeaderSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!navSearch.trim()) return;
+    router.push(`/categories?search=${encodeURIComponent(navSearch.trim())}`);
+    setMobileMenuOpen(false);
+  };
 
   // Sync auth status from cookie / localStorage on mount
   useEffect(() => {
@@ -95,21 +105,43 @@ export default function Header() {
           </span>
         </Link>
 
-        {/* Desktop Nav */}
-        <nav style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }} className="desktop-only">
+        {/* Desktop Nav & Quick Search */}
+        <nav style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }} className="desktop-only">
           <Link href="/" style={{ fontWeight: 600, textDecoration: 'none', color: 'inherit' }}>
-            {language === 'en' ? 'Home' : language === 'ur' ? 'ہوم' : 'گھر'}
+            {t('home')}
           </Link>
           <Link href="/categories" style={{ fontWeight: 600, textDecoration: 'none', color: 'inherit' }}>
-            {language === 'en' ? 'Explore' : language === 'ur' ? 'تلاش کریں' : 'ڳوليو'}
+            {t('explore')}
           </Link>
+
+          {/* Nav Search Input */}
+          <form onSubmit={handleHeaderSearch} style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
+            <input
+              type="text"
+              value={navSearch}
+              onChange={(e) => setNavSearch(e.target.value)}
+              placeholder={t('searchBtn') + '...'}
+              style={{
+                padding: '0.4rem 2rem 0.4rem 0.8rem',
+                borderRadius: '9999px',
+                border: '1px solid var(--border)',
+                fontSize: '0.85rem',
+                outline: 'none',
+                background: 'var(--input-bg)',
+                width: '160px'
+              }}
+            />
+            <button type="submit" style={{ position: 'absolute', right: '0.5rem', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)' }}>
+              <Search size={14} />
+            </button>
+          </form>
 
           {isLoggedIn && (
             <Link 
               href={userRole === 'seller' ? '/dashboard/seller' : userRole === 'admin' ? '/dashboard/admin' : '/dashboard/buyer'} 
               style={{ fontWeight: 600, textDecoration: 'none', color: 'var(--primary)', borderBottom: '2px solid var(--primary)' }}
             >
-              {userRole === 'seller' ? (language === 'en' ? 'Seller Panel' : 'سیلر پینل') : userRole === 'admin' ? 'Admin Panel' : (language === 'en' ? 'My Account' : 'میرا اکاؤنٹ')}
+              {userRole === 'seller' ? t('sellerPanel') : userRole === 'admin' ? t('adminPanel') : t('myAccount')}
             </Link>
           )}
         </nav>

@@ -254,6 +254,116 @@ export const translations: TranslationDict = {
     en: 'Custom Services',
     ur: 'آرڈر پر تیار شدہ کام',
     sd: 'آرڊر تي ٺهڻ جو ڪم'
+  },
+  home: {
+    en: 'Home',
+    ur: 'ہوم',
+    sd: 'گھر'
+  },
+  explore: {
+    en: 'Explore',
+    ur: 'تلاش کریں',
+    sd: 'ڳوليو'
+  },
+  sellerPanel: {
+    en: 'Seller Panel',
+    ur: 'سیلر پینل',
+    sd: 'سيلر پينل'
+  },
+  myAccount: {
+    en: 'My Account',
+    ur: 'میرا اکاؤنٹ',
+    sd: 'منهنجو اڪائونٽ'
+  },
+  adminPanel: {
+    en: 'Admin Panel',
+    ur: 'ایڈمن پینل',
+    sd: 'ايڊمن پينل'
+  },
+  searchPlaceholder: {
+    en: 'Search Ajrak, Rilli, Biryani or handmade crafts...',
+    ur: 'اجرک، رلی، بریانی یا دستکاری تلاش کریں...',
+    sd: 'اجرڪ، رلي، برياني يا هٿ جو ڪم ڳوليو...'
+  },
+  searchBtn: {
+    en: 'Search',
+    ur: 'تلاش کریں',
+    sd: 'ڳوليو'
+  },
+  registerTitle: {
+    en: 'Complete Registration',
+    ur: 'رجسٹریشن مکمل کریں',
+    sd: 'رجسٽريشن مڪمل ڪريو'
+  },
+  registerSubtitle: {
+    en: 'Please fill in your details to create your account',
+    ur: 'اپنا اکاؤنٹ بنانے کے لیے تفصیلات درج کریں',
+    sd: 'پنهنجو اڪائونٽ ٺاهڻ لاءِ تفصيل داخل ڪريو'
+  },
+  fullName: {
+    en: 'Full Name',
+    ur: 'پورا نام',
+    sd: 'پورو نالو'
+  },
+  genderLabel: {
+    en: 'Gender',
+    ur: 'جنس',
+    sd: 'جنس'
+  },
+  female: {
+    en: 'Female (خواتین)',
+    ur: 'خاتون',
+    sd: 'عورت'
+  },
+  male: {
+    en: 'Male (مرد)',
+    ur: 'مرد',
+    sd: 'مرد'
+  },
+  cityLabel: {
+    en: 'City',
+    ur: 'شہر',
+    sd: 'شهر'
+  },
+  accountType: {
+    en: 'Account Type',
+    ur: 'اکاؤنٹ کی قسم',
+    sd: 'اڪائونٽ جي نوعيت'
+  },
+  buyerRole: {
+    en: 'Buyer (Customer)',
+    ur: 'خریدار (کسٹمر)',
+    sd: 'خريدار (گراهڪ)'
+  },
+  sellerRole: {
+    en: 'Artisan / Seller',
+    ur: 'کاریگر / سیلر',
+    sd: 'ڪاريگر / سيلر'
+  },
+  bioLabel: {
+    en: 'Bio / Shop Story',
+    ur: 'بایو / دکان کی تفصیل',
+    sd: 'بايو / دڪان جي تفصيل'
+  },
+  completeRegistrationBtn: {
+    en: 'Complete & Save Profile',
+    ur: 'رجسٹریشن مکمل کریں',
+    sd: 'رجسٽريشن مڪمل ڪريو'
+  },
+  womenOnlyNotice: {
+    en: 'Notice: Only women artisans can register as sellers to list handmade items.',
+    ur: 'نوٹ: صرف خواتین کاریگر ہی مصنوعات فروخت کرنے کے لیے سیلر کے طور پر رجسٹر ہو سکتی ہیں۔',
+    sd: 'نوٽ: صرف عورتون ڪاريگر ئي شيءِ وڪڻڻ لاءِ سيلر طور رجسٽر ٿي سگهن ٿيون.'
+  },
+  noProducts: {
+    en: 'No Products Available',
+    ur: 'کوئی پروڈکٹ دستیاب نہیں ہے',
+    sd: 'ڪابه پراڊڪٽ موجود ناهي'
+  },
+  viewDetailsBtn: {
+    en: 'View Details',
+    ur: 'تفصیلات دیکھیں',
+    sd: 'تفصيل ڏسو'
   }
 };
 
