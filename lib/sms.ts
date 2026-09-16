@@ -1,5 +1,5 @@
 const BASE_URL = 'https://api.textbee.dev/api/v1';
-const DEVICE_ID = '6a34eaab77015dcde1611414';
+const DEVICE_ID = '6aaa5593243aaa9bc7d96fac';
 const API_KEY = process.env.TEXT_BEE_API || '8324da9f-a3e7-4451-91f2-06b963f65c28';
 
 /**
